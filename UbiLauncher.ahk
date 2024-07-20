@@ -6,7 +6,7 @@
 ;@Ahk2Exe-SetCompanyName GameXueRen
 ;@Ahk2Exe-SetCopyright © 2024 GameXueRen
 runAsAdmin()
-toolVersion := "Beta1.0"
+toolVersion := "v1.0"
 toolName := "育碧平台启动器"
 ;配置文件
 profilesName := toolName "配置.ini"
@@ -170,30 +170,44 @@ startUbi(isNewUbi, isOffline := false)
         warningMsgBox(ubiDirPath "`n不存在！`n请确保已选择有效目录！", "启动失败！")
         return false
     }
+    ubiStartPath := ubiDirPath "\upc.exe"
+    if !FileExist(ubiStartPath)
+    {
+        warningMsgBox("upc.exe 不存在！`n" ubiDirPath "`n育碧平台安装目录无效！", "启动失败！")
+        return false
+    }
+    if !isNewUbi
+    {
+        if !DirExist(oldUbiVersion)
+        {
+            warningMsgBox(oldUbiVersion "`n该旧版本文件夹不存在！", "启动失败！")
+            return false
+        }
+        if !FileExist(oldUbiVersion "\uplay.exe")
+        {
+            warningMsgBox(oldUbiVersion "`n旧版本文件夹内的 uplay.exe 不存在！", "启动失败！")
+            return false
+        }
+        ubiStartPath := ubiDirPath "\uplay.exe"
+    }
+    if ProcessExist("upc.exe")
+    {
+        result := warningMsgBox("新UI(测试版)育碧平台正在运行中！`n是否强制重启？", "强制重启？", "OKCancel Default2 Iconi")
+        if result != "OK"
+            return false
+        ProcessClose("upc.exe")
+        ProcessWaitClose("upc.exe", 10)
+    } else if ProcessExist("uplay.exe")
+    {
+        result := warningMsgBox("旧UI(标准版)育碧平台正在在运行中！`n是否强制重启？", "强制重启？", "OKCancel Default2 Iconi")
+        if result != "OK"
+            return false
+        ProcessClose("uplay.exe")
+        ProcessWaitClose("uplay.exe", 10)
+    }
     ;相关文件操作
     if isNewUbi
     {
-        ubiStartPath := ubiDirPath "\UbisoftConnect.exe"
-        if !FileExist(ubiStartPath)
-        {
-            warningMsgBox(ubiStartPath "`n启动程序 UbisoftConnect.exe 不存在！", "启动失败！")
-            return false
-        }
-        if ProcessExist("uplay.exe")
-        {
-            result := warningMsgBox("旧UI(标准版)育碧平台正在运行中！`n是否强制重启？", "强制重启？", "OKCancel Default2 	Iconi")
-            if result != "OK"
-                return false
-            ProcessClose("uplay.exe")
-            ProcessWaitClose("uplay.exe", 10)
-        }else if ProcessExist("upc.exe")
-        {
-            result := warningMsgBox("新UI(测试版)育碧平台已经在运行！`n是否强制重启？", "强制重启？", "OKCancel Default2 	Iconi")
-            if result != "OK"
-                return false
-            ProcessClose("upc.exe")
-            ProcessWaitClose("upc.exe", 10)
-        }
         loop files ubiDirPath "\*"
         {
             if A_LoopFileExt != backupExt
@@ -205,50 +219,21 @@ startUbi(isNewUbi, isOffline := false)
                 try {
                     FileDelete(A_LoopFileFullPath)
                 }
-                continue
-            }
-            ;强制恢复备份文件
-            try {
-                FileMove(A_LoopFileFullPath, defaultFile, 1)
+            } else
+            {
+                ;强制恢复备份文件
+                try {
+                    FileMove(A_LoopFileFullPath, defaultFile, 1)
+                }
             }
         }
     } else
     {
-        oldUbiDir := oldUbiVersionCtrl.Text
-        if !FileExist(ubiDirPath "\UbisoftConnect.exe")
-        {
-            warningMsgBox("UbisoftConnect.exe 不存在！`n" ubiDirPath "`n育碧平台安装目录无效！", "启动失败！")
-            return false
-        }
-        if !DirExist(oldUbiDir)
-        {
-            warningMsgBox(oldUbiDir "`n该旧版本文件夹不存在！", "启动失败！")
-            return false
-        }
-        if !FileExist(oldUbiDir "\uplay.exe")
-        {
-            warningMsgBox(oldUbiDir "`n旧版本文件夹内的 uplay.exe 不存在！", "启动失败！")
-            return false
-        }
-        if ProcessExist("upc.exe")
-        {
-            result := warningMsgBox("新UI(测试版)育碧平台正在运行中！`n是否强制重启？", "强制重启？", "OKCancel Default2 	Iconi")
-            if result != "OK"
-                return false
-            ProcessClose("upc.exe")
-            ProcessWaitClose("upc.exe", 10)
-        } else if ProcessExist("uplay.exe")
-        {
-            result := warningMsgBox("旧UI(标准版)育碧平台已经在运行！`n是否强制重启？", "强制重启？", "OKCancel Default2 	Iconi")
-            if result != "OK"
-                return false
-            ProcessClose("uplay.exe")
-            ProcessWaitClose("uplay.exe", 10)
-        }
-        loop Files oldUbiDir "\*"
+        loop Files oldUbiVersion "\*"
         {
             ubiDirLoopFile := ubiDirPath "\" A_LoopFileName
             backupFile := ubiDirLoopFile "." backupExt
+            isNeedBackup := false
             if FileExist(ubiDirLoopFile)
             {
                 ;根据文件大小与文件修改时间判断是否一致、是否需要备份
@@ -256,7 +241,6 @@ startUbi(isNewUbi, isOffline := false)
                 fileDiffTime := DateDiff(ubiDirLoopFileTime, A_LoopFileTimeModified, "S")
                 if (FileGetSize(ubiDirLoopFile) = A_LoopFileSize) && (fileDiffTime = 0)
                     continue
-                isNeedBackup := false
                 if FileExist(backupFile)
                 {
                     backupDiffTime := DateDiff(ubiDirLoopFileTime, FileGetTime(backupFile), "S")
@@ -292,16 +276,26 @@ startUbi(isNewUbi, isOffline := false)
                 }
             }
         }
-        ubiStartPath := ubiDirPath "\uplay.exe"
     }
     ;修改育碧平台配置文件
-    ubiCfgFile := EnvGet("LocalAppData") "\Ubisoft Game Launcher\settings.yaml"
-    if FileExist(ubiCfgFile)
+    ubiCfgDir := EnvGet("LocalAppData") "\Ubisoft Game Launcher"
+    ubiCfgFile := ubiCfgDir "\settings.yaml"
+    if DirExist(ubiCfgDir)
     {
-        ubiCfg := FileRead(ubiCfgFile, "UTF-8")
-    }else
+        if FileExist(ubiCfgFile)
+        {
+            ubiCfg := FileRead(ubiCfgFile, "UTF-8")
+        } else
+        {
+            ;配置文件不存在时，默认配置为中文
+            ubiCfg := "language:`r`n  code: zh-CN"
+        }
+    } else
     {
-        ubiCfg := ""
+        try {
+            DirCreate(ubiCfgDir)
+        }
+        ubiCfg := "language:`r`n  code: zh-CN"
     }
     isChangeConnectView := changeYAMLData(&ubiCfg, "connect_view", "enabled", isNewUbi ? "true" : "false")
     isChangeUser := changeYAMLData(&ubiCfg, "user", "offline", isOffline ? "true" : "false")
@@ -316,8 +310,9 @@ startUbi(isNewUbi, isOffline := false)
             FileAppend(ubiCfg, ubiCfgFile, "UTF-8")
         } catch
         {
-            warningMsgBox("配置文件写入失败！", "启动失败！")
-            return false
+            continueResult := warningMsgBox("育碧平台配置文件修改失败！`n是否继续启动？", "是否继续？", "YesNo Default2 Iconi")
+            if continueResult != "Yes"
+                return false
         }
     }
     try {
@@ -344,9 +339,10 @@ changeYAMLData(&yamlData, section, key, value)
         yamlData := yamlData "`r`n" section ":`r`n  " key ": " value
         return true
     }
-    sectionEndPos := InStr(yamlData, ":`r`n", 1, sectionStartPos + StrLen(section ":`r`n"))
+    sectionTitleLen := StrLen(section ":`r`n")
+    sectionEndPos := InStr(yamlData, ":`r`n", 1, sectionStartPos + sectionTitleLen)
     ;查询key位置
-    keyStartPos := InStr(yamlData, key ": ", 1, sectionStartPos)
+    keyStartPos := InStr(yamlData, key ": ", 1, sectionStartPos + sectionTitleLen)
     ;判断是否在section层级下
     if sectionEndPos && (keyStartPos > sectionEndPos)
         keyStartPos := 0
